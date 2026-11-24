@@ -155,14 +155,13 @@
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
       <!--
-        Предзагрузка 3D-моделей через <a-assets>.
-        Каждая модель — отдельный <a-asset-item> с уникальным id.
+        3D-модели подключаются напрямую через src (путь к .glb).
+        Мы НЕ используем <a-assets> с предзагрузкой: у неё жёсткий таймаут 3 с,
+        и тяжёлая модель (brainstem.glb ≈ 3 МБ) на мобильном интернете не
+        успевает скачаться — A-Frame отдаёт gltf-model пустые данные и падает
+        с JSON.parse. Прямой src грузит каждую модель своей GLTFLoader-очередью,
+        без таймаута: сцена стартует сразу, а модели «подключаются» по мере загрузки.
       -->
-      <a-assets>
-        <a-asset-item id="foxModel"      src="./assets/models/fox.glb"      response-type="arraybuffer"></a-asset-item>
-        <a-asset-item id="cesiumModel"   src="./assets/models/cesiumman.glb" response-type="arraybuffer"></a-asset-item>
-        <a-asset-item id="brainstemModel" src="./assets/models/brainstem.glb" response-type="arraybuffer"></a-asset-item>
-      </a-assets>
 
       <!--
         ===================== Книга 1: «Лис и Лес» =====================
@@ -175,7 +174,7 @@
       -->
       <a-entity mindar-image-target="targetIndex: 0">
         <a-gltf-model
-          src="#foxModel"
+          src="./assets/models/fox.glb"
           position="0 0 0"
           rotation="-90 0 0"
           scale="0.01 0.01 0.01"
@@ -186,7 +185,7 @@
       <!-- ===================== Книга 2: «Шаги в Будущем» ===================== -->
       <a-entity mindar-image-target="targetIndex: 1">
         <a-gltf-model
-          src="#cesiumModel"
+          src="./assets/models/cesiumman.glb"
           position="0 0 0"
           rotation="-90 0 0"
           scale="0.4 0.4 0.4"
@@ -197,7 +196,7 @@
       <!-- ===================== Книга 3: «Мой Механический Друг» ===================== -->
       <a-entity mindar-image-target="targetIndex: 2">
         <a-gltf-model
-          src="#brainstemModel"
+          src="./assets/models/brainstem.glb"
           position="0 0 0"
           rotation="-90 0 0"
           scale="0.5 0.5 0.5"
@@ -326,9 +325,6 @@
         hint.textContent = 'Наведите камеру на обложку одной из трёх книг';
       });
     });
-
-    // Подстраиваем размеры при повороте телефона.
-    window.addEventListener('resize', () => window.dispatchEvent(new Event('resize')));
   </script>
 </body>
 </html>
