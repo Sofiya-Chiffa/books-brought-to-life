@@ -276,21 +276,48 @@
       statusPill.innerHTML = accent ? `<b>${accent}</b> · ${text}` : text;
     }
 
-    // Ждём, пока A-Frame и MindAR полностью прогрузятся.
+    // Ждём, пока A-Frame загрузит сцену. MindAR регистрирует систему
+    // mindar-image-system синхронно при инициализации сцены, и .start()
+    // (запуск камеры) можно вызывать сразу после события 'loaded' —
+    // отдельного сигнала готовности ждать не нужно.
+    //
+    // ВАЖНО: MindAR шлёт событие 'arReady' (с большой R!) только ПОСЛЕ того,
+    // как .start() уже открыл камеру и прогнал пробный кадр. Опираться на
+    // него для активации кнопки нельзя — получается замкнутый круг:
+    // кнопка ждёт 'arReady', 'arReady' ждёт .start(), .start() ждёт нажатия.
+    // Поэтому кнопку включаем по факту готовности сцены, а не AR-сессии.
     const sceneEl = document.querySelector('a-scene');
+
+    function enableStart() {
+      spinner.style.display = 'none';
+      startBtn.disabled = false;
+      startBtn.textContent = 'Запустить камеру';
+      setStatus('Нажмите «Запустить камеру»');
+    }
+
     sceneEl.addEventListener('loaded', () => {
       setStatus('Сцена готова');
-      // MindAR ставит систему на <a-scene>; дождёмся её инициализации.
-      const system = sceneEl.systems['mindar-image-system'];
-      const onReady = () => {
-        spinner.style.display = 'none';
-        startBtn.disabled = false;
-        startBtn.textContent = 'Запустить камеру';
-        setStatus('Нажмите «Запустить камеру»');
-      };
-      if (system && system.initialized) onReady();
-      else sceneEl.addEventListener('arready', onReady, { once: true });
+      if (sceneEl.systems['mindar-image-system']) {
+        enableStart();
+      } else {
+        // Система может зарегистрироваться на пару тиков позже 'loaded'.
+        const sysTimer = setInterval(() => {
+          if (sceneEl.systems['mindar-image-system']) {
+            clearInterval(sysTimer);
+            enableStart();
+          }
+        }, 100);
+      }
     });
+
+    // Страховка: если событие 'loaded' по какой-то причине не пришло за 8 с,
+    // всё равно активируем кнопку — пользователь не должен висеть на загрузке.
+    setTimeout(() => {
+      if (startBtn.disabled) {
+        console.warn('Сцена не сообщила о готовности за 8 с — включаем кнопку принудительно.');
+        enableStart();
+      }
+    }, 8000);
 
     // Старт камеры по кнопке — так требуют мобильные Safari/Chrome:
     // доступ к камере должен инициироваться жестом пользователя.
