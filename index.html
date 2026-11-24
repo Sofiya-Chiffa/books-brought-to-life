@@ -143,7 +143,7 @@
   -->
   <div id="scene-wrap">
     <a-scene
-      mindar-image-system="imageTargetSrc: ./assets/targets/targets.mind; filterBetaCV: 0.1;"
+      mindar-image="imageTargetSrc: ./assets/targets/targets.mind; filterBeta: 0.1; autoStart: false;"
       color-space="sRGB"
       renderer="alpha: true; antialias: true; logarithmicDepthBuffer: true;"
       vr-mode-ui="enabled: false"
@@ -276,16 +276,17 @@
       statusPill.innerHTML = accent ? `<b>${accent}</b> · ${text}` : text;
     }
 
-    // Ждём, пока A-Frame загрузит сцену. MindAR регистрирует систему
-    // mindar-image-system синхронно при инициализации сцены, и .start()
-    // (запуск камеры) можно вызывать сразу после события 'loaded' —
-    // отдельного сигнала готовности ждать не нужно.
+    // Ждём, пока A-Frame загрузит сцену, а MindAR — вызовет system.setup().
     //
-    // ВАЖНО: MindAR шлёт событие 'arReady' (с большой R!) только ПОСЛЕ того,
-    // как .start() уже открыл камеру и прогнал пробный кадр. Опираться на
-    // него для активации кнопки нельзя — получается замкнутый круг:
-    // кнопка ждёт 'arReady', 'arReady' ждёт .start(), .start() ждёт нажатия.
-    // Поэтому кнопку включаем по факту готовности сцены, а не AR-сессии.
+    // Готовность .start() определяется НЕ фактом существования системы, а тем,
+    // что setup() уже создал this.ui (объект экрана загрузки/сканирования):
+    //   setup()  →  this.ui = new UI({...})   // вызывается из init() компоненты
+    //   start()  →  this.ui.showLoading()     // упадёт, если this.ui ещё нет
+    // Поэтому кнопку активируем только когда system.ui определён.
+    //
+    // autoStart:false на <a-scene> отключает автозапуск MindAR по событию
+    // 'renderstart' (он вызывает getUserMedia без жеста пользователя и на iOS
+    // обречён на отказ) — стартуем только по клику.
     const sceneEl = document.querySelector('a-scene');
 
     function enableStart() {
@@ -295,29 +296,55 @@
       setStatus('Нажмите «Запустить камеру»');
     }
 
+    // Конфиг для фолбэк-вызова setup(): берём из распарсенной data компоненты,
+    // иначе — из известных значений страницы. Логика -1→null повторяет init()
+    // самой компоненты mindar-image-system.
+    function buildMindarConfig() {
+      const d = sceneEl.components['mindar-image'] && sceneEl.components['mindar-image'].data;
+      if (d && d.imageTargetSrc) {
+        const n = v => (v === -1 ? null : v);
+        return {
+          imageTargetSrc: d.imageTargetSrc, maxTrack: d.maxTrack,
+          filterMinCF: n(d.filterMinCF), filterBeta: n(d.filterBeta),
+          missTolerance: n(d.missTolerance), warmupTolerance: n(d.warmupTolerance),
+          showStats: d.showStats, uiLoading: d.uiLoading, uiScanning: d.uiScanning, uiError: d.uiError
+        };
+      }
+      return {
+        imageTargetSrc: './assets/targets/targets.mind', maxTrack: 1,
+        filterMinCF: null, filterBeta: 0.1, missTolerance: null, warmupTolerance: null,
+        showStats: false, uiLoading: 'yes', uiScanning: 'yes', uiError: 'yes'
+      };
+    }
+
     sceneEl.addEventListener('loaded', () => {
       setStatus('Сцена готова');
-      if (sceneEl.systems['mindar-image-system']) {
-        enableStart();
-      } else {
-        // Система может зарегистрироваться на пару тиков позже 'loaded'.
-        const sysTimer = setInterval(() => {
-          if (sceneEl.systems['mindar-image-system']) {
-            clearInterval(sysTimer);
-            enableStart();
-          }
-        }, 100);
-      }
+      let resolved = false;
+      const tryEnable = () => {
+        if (resolved) return true;
+        const sys = sceneEl.systems['mindar-image-system'];
+        if (sys && sys.ui) { resolved = true; enableStart(); return true; }
+        return false;
+      };
+      // Опрашиваем, пока setup() не создаст this.ui.
+      const sysTimer = setInterval(() => { if (tryEnable()) clearInterval(sysTimer); }, 100);
+      // Фолбэк на 500 мс: если this.ui так и не появился — вызываем setup() сами.
+      // (init() компоненты синхронен и выполняется до 'loaded'; если к этому
+      // моменту this.ui нет — значит компонента его не создала, и сама уже не создаст.)
+      setTimeout(() => {
+        if (resolved) return;
+        const sys = sceneEl.systems['mindar-image-system'];
+        if (sys && !sys.ui) {
+          console.warn('mindar setup() не вызвался автоматически — вызываем вручную.');
+          try { sys.setup(buildMindarConfig()); } catch (e) { console.error('setup fallback failed', e); }
+        }
+        tryEnable();
+      }, 500);
     });
 
-    // Страховка: если событие 'loaded' по какой-то причине не пришло за 8 с,
-    // всё равно активируем кнопку — пользователь не должен висеть на загрузке.
-    setTimeout(() => {
-      if (startBtn.disabled) {
-        console.warn('Сцена не сообщила о готовности за 8 с — включаем кнопку принудительно.');
-        enableStart();
-      }
-    }, 8000);
+    // Жёсткая страховка на 8 с: даже если что-то пошло не так — не вешаем
+    // пользователя. .start() тогда либо сработает, либо выбросит ошибку в try/catch.
+    setTimeout(() => { if (startBtn.disabled) enableStart(); }, 8000);
 
     // Старт камеры по кнопке — так требуют мобильные Safari/Chrome:
     // доступ к камере должен инициироваться жестом пользователя.
