@@ -317,7 +317,7 @@
   <!-- AR-сцена (как в исходном файле, плюс курсор для клика по модели) -->
   <div id="scene-wrap">
     <a-scene
-      mindar-image="imageTargetSrc: targets/targets_Coraline.mind;"
+      mindar-image="imageTargetSrc: targets/targets_Coraline.mind; autoStart: false;"
       color-space="sRGB"
       renderer="colorManagement: true, physicallyCorrectLights"
       vr-mode-ui="enabled: false"
@@ -536,24 +536,26 @@
       arStarted = true;
       toast('Наведите камеру на обложку книги.', 'info', 5000);
 
-      // 2. Подключаемся к MindAR
+      // 2. Подключаемся к MindAR. autoStart:false на сцене — стартуем только тут.
+      //    Если камера занята прошлой сессией (часто после перезагрузки), сначала
+      //    освобождаем её через stopAR() и пробуем ещё раз.
       const sceneEl = document.querySelector('a-scene');
-      sceneEl.addEventListener('loaded', () => {
+      function bootAR(retried) {
         mindar = sceneEl.systems['mindar-image-system'];
-        if (mindar) {
-          mindar.start().catch(err => {
-            toast('Ошибка запуска AR: ' + (err && err.message ? err.message : err), 'err', 0);
-          });
-        }
-      });
-
-      // Если сцена уже загружена — стартуем сразу
-      if (sceneEl.hasLoaded && sceneEl.systems['mindar-image-system']) {
-        mindar = sceneEl.systems['mindar-image-system'];
+        if (!mindar) return;
         mindar.start().catch(err => {
-          toast('Ошибка запуска AR: ' + (err && err.message ? err.message : err), 'err', 0);
+          const msg = (err && err.message) ? err.message : String(err);
+          if (!retried && /busy|already|track|in use|hardware|available/i.test(msg)) {
+            // камера занята — освобождаем и ретраим один раз
+            stopAR();
+            setTimeout(() => bootAR(true), 600);
+          } else {
+            toast('Не удалось запустить камеру. Закройте другие вкладки с камерой и обновите страницу.', 'err', 0);
+          }
         });
       }
+      sceneEl.addEventListener('loaded', () => bootAR(false));
+      if (sceneEl.hasLoaded && sceneEl.systems['mindar-image-system']) bootAR(false);
 
       // 3. Слежение за целью: опрашиваем видимость каждые 200 мс, а не полагаемся
       //    только на targetFound/targetLost — эти события у MindAR часто не
@@ -609,6 +611,30 @@
       foundCard.addEventListener('click', openAnno);
       foundCard.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAnno(); } });
     }
+
+    // ---------- Очистка AR-сессии ----------
+    // КРИТИЧНО для перезагрузки: если не освободить камеру и MindAR, при следующем
+    // открытии страницы mindar.start() не сможет получить видеопоток и молча упадёт —
+    // тогда targetFound не выстрелит и плашка с книгой не появится.
+    function stopAR() {
+      try {
+        if (mindar && typeof mindar.stop === 'function') {
+          mindar.stop();
+        }
+      } catch (e) { /* сессия уже закрыта */ }
+      mindar = null;
+      // Останавливаем видеопоток камеры напрямую (MindAR держит его в <video>)
+      const v = document.querySelector('video');
+      if (v && v.srcObject) {
+        v.srcObject.getTracks().forEach(tr => tr.stop());
+        v.srcObject = null;
+      }
+    }
+    // pagehide — основной сигнал на мобильных (включая закрытие вкладки и перезагрузку);
+    // beforeunload — дополнительно для десктопа; visibilitychange — для сворачивания.
+    window.addEventListener('pagehide', stopAR);
+    window.addEventListener('beforeunload', stopAR);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) stopAR(); });
 
     // ---------- Проверка освещённости ----------
     let lightCanvas = null, lightCtx = null, lightTimer = null, lowLightSince = 0;
