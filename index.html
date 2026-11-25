@@ -534,7 +534,7 @@
       booksBtn.classList.remove('hidden-init');
       topBanner.classList.add('show');
       arStarted = true;
-      toast('Наведите камеру на обложку книги «Коралина».', 'info', 5000);
+      toast('Наведите камеру на обложку книги.', 'info', 5000);
 
       // 2. Подключаемся к MindAR
       const sceneEl = document.querySelector('a-scene');
@@ -555,11 +555,13 @@
         });
       }
 
-      // 3. Слушаем события цели: при нахождении — крупная готическая плашка
-      //    с названием книги и автором (кликабельная); при потере — обратно «Наведите…».
+      // 3. Слежение за целью: опрашиваем видимость каждые 200 мс, а не полагаемся
+      //    только на targetFound/targetLost — эти события у MindAR часто не
+      //    выстреливают повторно после targetLost, и плашка пропадает навсегда.
       const target = document.querySelector('[mindar-image-target]');
       let lostTimer = null;
       let hintLostShown = false;
+      let wasFound = false; // предыдущее состояние — чтобы не дёргать логику впустую
       function showFound() {
         topBanner.classList.add('show', 'is-found');
         if (lostTimer) { clearTimeout(lostTimer); lostTimer = null; }
@@ -576,8 +578,20 @@
           toast('Наведите камеру на обложку книги.', 'info', 3500);
         }, 3500);
       }
-      target.addEventListener('targetFound', showFound);
-      target.addEventListener('targetLost', showScan);
+      // targetFound/Lost остаются как резервный канал
+      target.addEventListener('targetFound', () => { wasFound = true; showFound(); });
+      target.addEventListener('targetLost', () => { wasFound = false; showScan(); });
+      // Основной канал — опрос Object3D цели: MindAR выставляет .visible=true,
+      // пока обложка в кадре, и .visible=false, когда потеряна.
+      const poll = setInterval(() => {
+        const obj = target.object3D;
+        if (!obj) return;
+        const nowFound = obj.visible === true;
+        if (nowFound !== wasFound) {
+          wasFound = nowFound;
+          if (nowFound) showFound(); else showScan();
+        }
+      }, 200);
 
       // 4. Клик по готической плашке (или Enter на ней) → аннотация.
       //    Это надёжнее, чем ловить тап по мелкой 3D-модели.
