@@ -106,7 +106,7 @@
 
     /* ---------- Плавающая кнопка "Доступные книги" ---------- */
     #books-btn {
-      position: fixed; top: 16px; right: 16px; z-index: 60;
+      position: fixed; bottom: 16px; left: 16px; z-index: 60;
       display: inline-flex; align-items: center; gap: 8px;
       background: var(--glass-strong); color: var(--text);
       border: 1px solid var(--glass-border);
@@ -273,18 +273,26 @@
         <a-asset-item id="coralineModel" src="models/Coraline.glb"></a-asset-item>
       </a-assets>
 
-      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-
-      <!-- курсор для кликов по 3D-модели -->
-      <a-entity cursor="rayOrigin: mouse; fuse: false" raycaster="objects: .clickable; far: 100"></a-entity>
+      <a-camera position="0 0 0" look-controls="enabled: false">
+        <!-- курсор внутри камеры: клик/тап по сенсору = raycaster от центра экрана -->
+        <a-entity cursor="rayOrigin: mouse; fuse: false" raycaster="objects: .clickable; far: 100; autoRefresh: true" position="0 0 -1"></a-entity>
+      </a-camera>
 
       <a-entity mindar-image-target="targetIndex: 0">
+        <!-- Прозрачный хитбокс: ловит клики/тапы над моделью надёжнее, чем сама glTF-сетка -->
+        <a-box
+          id="coralineHitbox"
+          class="clickable"
+          position="0 0.05 0"
+          scale="0.4 0.5 0.4"
+          material="shader: flat; color: #ffffff; transparent: true; opacity: 0.0; depthTest: false"
+          visible="true">
+        </a-box>
         <a-gltf-model
           id="coralineModelEl"
-          class="clickable"
-          rotation="0 0 0"
+          rotation="90 0 0"
           position="0 0 0.1"
-          scale="0.005 0.005 0.005"
+          scale="0.05 0.05 0.05"
           src="#coralineModel"
           animation="property: position; to: 0 0.1 0.1; dur: 1000; easing: easeInOutQuad; loop: true; dir: alternate">
         </a-gltf-model>
@@ -517,10 +525,15 @@
       });
 
       // 4. Клик по модели → аннотация
-      const modelEl = document.getElementById('coralineModelEl');
-      modelEl.addEventListener('click', () => openModal('anno-back'));
-      modelEl.addEventListener('mouseenter', () => { modelEl.setAttribute('scale', '0.0055 0.0055 0.0055'); });
-      modelEl.addEventListener('mouseleave', () => { modelEl.setAttribute('scale', '0.005 0.005 0.005'); });
+      // Клик/тап ловит прозрачный хитбокс — он стабильнее, чем glTF-сетка.
+      const hitbox = document.getElementById('coralineHitbox');
+      hitbox.addEventListener('click', (evt) => {
+        evt.stopPropagation();
+        openModal('anno-back');
+      });
+      // подсветка при наведении мыши
+      hitbox.addEventListener('mouseenter', () => { hitbox.setAttribute('material', 'opacity', 0.12); });
+      hitbox.addEventListener('mouseleave', () => { hitbox.setAttribute('material', 'opacity', 0.0); });
     }
 
     // ---------- Проверка освещённости ----------
