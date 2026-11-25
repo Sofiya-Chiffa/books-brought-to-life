@@ -283,8 +283,8 @@
         <a-box
           id="coralineHitbox"
           class="clickable"
-          position="0 0.05 0"
-          scale="0.4 0.5 0.4"
+          position="0 0.035 0"
+          scale="0.28 0.35 0.28"
           material="shader: flat; color: #ffffff; transparent: true; opacity: 0.0; depthTest: false"
           visible="true">
         </a-box>
@@ -292,7 +292,7 @@
           id="coralineModelEl"
           rotation="90 0 0"
           position="0 0 0.1"
-          scale="0.05 0.05 0.05"
+          scale="0.0333 0.0333 0.0333"
           src="#coralineModel"
           animation="property: position; to: 0 0.1 0.1; dur: 1000; easing: easeInOutQuad; loop: true; dir: alternate">
         </a-gltf-model>
@@ -506,38 +506,59 @@
       // 3. Слушаем события цели
       const target = document.querySelector('[mindar-image-target]');
       let lostTimer = null;
-      let lightTimer = null;
       let hintLostShown = false;
+      let modelVisible = false; // цель найдена — модель видна на экране
       target.addEventListener('targetFound', () => {
         scanIndicator.classList.remove('show');
         if (lostTimer) { clearTimeout(lostTimer); lostTimer = null; }
         if (!hintLostShown) toast('Модель найдена — нажмите на неё, чтобы прочитать аннотацию.', 'ok', 4500);
         hintLostShown = true;
+        modelVisible = true;
         startLightCheck();
       });
       target.addEventListener('targetLost', () => {
         scanIndicator.classList.add('show');
         stopLightCheck();
+        modelVisible = false;
         if (lostTimer) clearTimeout(lostTimer);
         lostTimer = setTimeout(() => {
           toast('Наведите камеру на обложку книги.', 'info', 3500);
         }, 3500);
       });
 
-      // 4. Клик по модели → аннотация
-      // Клик/тап ловит прозрачный хитбокс — он стабильнее, чем glTF-сетка.
+      // 4. Открытие аннотации. Два способа срабатывают вместе:
+      //    а) клик/тап ловит прозрачный хитбокс (raycaster) — для рабочего стола;
+      //    б) запасной тап по экрану камеры, пока модель видна — для телефона,
+      //       где raycaster часто промахивается по мелкой модели.
       const hitbox = document.getElementById('coralineHitbox');
       hitbox.addEventListener('click', (evt) => {
         evt.stopPropagation();
-        openModal('anno-back');
+        openAnno();
       });
-      // подсветка при наведении мыши
       hitbox.addEventListener('mouseenter', () => { hitbox.setAttribute('material', 'opacity', 0.12); });
       hitbox.addEventListener('mouseleave', () => { hitbox.setAttribute('material', 'opacity', 0.0); });
+
+      let lastTap = 0;
+      function openAnno() {
+        // не открываем повторно и поверх других панелей
+        if (document.getElementById('anno-back').classList.contains('open')) return;
+        if (document.getElementById('author-back').classList.contains('open')) return;
+        if (document.getElementById('books-panel').classList.contains('open')) return;
+        if (Date.now() - lastTap < 400) return; // антидребезг
+        lastTap = Date.now();
+        openModal('anno-back');
+      }
+      // Запасной тап по экрану камеры (canvas — отдельный слой, overlay-кнопки его не trigger)
+      function onScreenTap() { if (modelVisible) openAnno(); }
+      const canvas = document.querySelector('a-scene').canvas || document.querySelector('canvas');
+      if (canvas) {
+        canvas.addEventListener('click', onScreenTap);
+        canvas.addEventListener('touchend', onScreenTap, { passive: true });
+      }
     }
 
     // ---------- Проверка освещённости ----------
-    let lightCanvas = null, lightCtx = null, lowLightSince = 0;
+    let lightCanvas = null, lightCtx = null, lightTimer = null, lowLightSince = 0;
     function startLightCheck() {
       if (lightTimer) return;
       lightCanvas = document.createElement('canvas');
