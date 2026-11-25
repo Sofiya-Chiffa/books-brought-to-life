@@ -537,16 +537,24 @@
       toast('Наведите камеру на обложку книги.', 'info', 5000);
 
       // 2. Подключаемся к MindAR. Стартуем по клику «Начать».
+      //    ВАЖНО: сначала вешаем слежение за целью и обработчики ошибок,
+      //    и только потом вызываем bootAR(). MindAR 1.2.5 возвращает из
+      //    start() undefined (а не Promise), поэтому раньше строка
+      //    mindar.start().catch(...) бросала TypeError прямо в середине
+      //    startAR — и код, который должен показывать плашку с книгой,
+      //    вообще не регистрировался. Из-за этого плашка и не появлялась.
       const sceneEl = document.querySelector('a-scene');
+      sceneEl.addEventListener('arError', () => {
+        toast('Не удалось запустить камеру. Закройте другие вкладки с камерой и обновите страницу.', 'err', 0);
+      });
+
       function bootAR() {
         mindar = sceneEl.systems['mindar-image-system'];
         if (!mindar) return;
-        mindar.start().catch(err => {
-          toast('Не удалось запустить камеру. Закройте другие вкладки с камерой и обновите страницу.', 'err', 0);
-        });
+        try { mindar.start(); } catch (e) {
+          toast('Не удалось запустить камеру. Обновите страницу.', 'err', 0);
+        }
       }
-      sceneEl.addEventListener('loaded', bootAR);
-      if (sceneEl.hasLoaded && sceneEl.systems['mindar-image-system']) bootAR();
 
       // 3. Слежение за целью: опрашиваем видимость каждые 200 мс, а не полагаемся
       //    только на targetFound/targetLost — эти события у MindAR часто не
@@ -601,6 +609,12 @@
       }
       foundCard.addEventListener('click', openAnno);
       foundCard.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAnno(); } });
+
+      // 5. Запускаем сам MindAR в самом конце startAR, после того как все
+      //    слушатели и опрос уже повешены. Если bootAR выбросит исключение,
+      //    слежение за книгой всё равно работает — и наоборот.
+      sceneEl.addEventListener('loaded', bootAR);
+      if (sceneEl.hasLoaded && sceneEl.systems['mindar-image-system']) bootAR();
     }
 
     // ---------- Очистка AR-сессии ----------
