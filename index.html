@@ -237,21 +237,77 @@
     .author-years { color: var(--text-dim); font-size: .82rem; margin: 0 0 8px; }
     .author-roles { display: flex; flex-wrap: wrap; gap: 6px; }
 
-    /* индикатор поиска цели (по центру сверху) */
-    #scan-indicator {
+    /* Верхняя плашка: «Наведите на книгу…» ↔ готическая плашка с книгой */
+    #top-banner {
       position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
-      z-index: 55; display: none; align-items: center; gap: 8px;
+      z-index: 55; width: max-content; max-width: 92vw;
+      display: none;
+    }
+    #top-banner.show { display: block; }
+
+    /* Состояние поиска — маленькая пилюля */
+    #top-banner .scan-pill {
+      display: inline-flex; align-items: center; gap: 8px;
       background: var(--glass-strong); border: 1px solid var(--glass-border);
       backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
       border-radius: 999px; padding: 8px 16px; font-size: .85rem; color: var(--text);
       box-shadow: var(--shadow);
     }
-    #scan-indicator.show { display: inline-flex; }
-    #scan-indicator .pulse {
+    #top-banner .scan-pill .pulse {
       width: 9px; height: 9px; border-radius: 50%; background: var(--accent-2);
       box-shadow: 0 0 10px var(--accent-2); animation: pulse 1.2s ease-in-out infinite;
     }
     @keyframes pulse { 0%,100%{ transform: scale(1); opacity:1;} 50%{ transform: scale(1.4); opacity:.5;} }
+
+    /* Состояние «книга найдена» — крупная готическая плашка, кликабельная */
+    #top-banner .found-card {
+      display: none; cursor: pointer;
+      position: relative;
+      padding: 16px 30px 18px;
+      background: linear-gradient(180deg, rgba(26,14,40,.92), rgba(12,8,24,.92));
+      border: 1px solid rgba(180,140,255,.35);
+      border-radius: 6px;
+      box-shadow: 0 0 0 1px rgba(124,92,255,.25), 0 18px 50px rgba(0,0,0,.55), inset 0 0 30px rgba(124,92,255,.12);
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      text-align: center;
+      animation: foundIn .45s cubic-bezier(.2,.9,.3,1.2);
+    }
+    @keyframes foundIn { from { opacity:0; transform: translateY(-10px) scale(.97);} to {opacity:1; transform:none;} }
+    /* угловые готические засечки */
+    #top-banner .found-card::before,
+    #top-banner .found-card::after {
+      content: ""; position: absolute; width: 14px; height: 14px;
+      border: 1px solid rgba(180,140,255,.6);
+    }
+    #top-banner .found-card::before { top: 6px; left: 6px; border-right: 0; border-bottom: 0; }
+    #top-banner .found-card::after  { bottom: 6px; right: 6px; border-left: 0; border-top: 0; }
+    #top-banner .found-card .ornament {
+      font-size: .9rem; letter-spacing: .5em; color: var(--accent-2);
+      margin-bottom: 2px; opacity: .9;
+    }
+    #top-banner .found-card .title {
+      font-family: "Georgia", "Times New Roman", serif;
+      font-size: clamp(1.6rem, 6vw, 2.4rem); line-height: 1.05;
+      font-weight: 700; letter-spacing: .01em;
+      background: linear-gradient(120deg, #f3f1ff 0%, #d9c9ff 50%, var(--accent-2) 100%);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+      text-shadow: 0 0 24px rgba(124,92,255,.4);
+    }
+    #top-banner .found-card .author {
+      font-family: "Georgia", "Times New Roman", serif;
+      font-style: italic; font-size: clamp(.85rem, 3vw, 1.05rem);
+      color: var(--text-dim); margin-top: 4px; letter-spacing: .04em;
+    }
+    #top-banner .found-card .tap-hint {
+      margin-top: 10px; font-size: .72rem; letter-spacing: .12em; text-transform: uppercase;
+      color: var(--accent); opacity: .85;
+    }
+    #top-banner .found-card:hover { border-color: rgba(180,140,255,.6); box-shadow: 0 0 0 1px rgba(124,92,255,.45), 0 22px 60px rgba(0,0,0,.6), inset 0 0 40px rgba(124,92,255,.18); }
+    #top-banner .found-card:active { transform: scale(.985); }
+
+    #top-banner.is-found .scan-pill { display: none; }
+    #top-banner.is-found .found-card { display: block; }
+    #top-banner:not(.is-found) .found-card { display: none; }
 
     .hidden-init { display: none !important; }
   </style>
@@ -273,21 +329,9 @@
         <a-asset-item id="coralineModel" src="models/Coraline.glb"></a-asset-item>
       </a-assets>
 
-      <a-camera position="0 0 0" look-controls="enabled: false">
-        <!-- курсор внутри камеры: клик/тап по сенсору = raycaster от центра экрана -->
-        <a-entity cursor="rayOrigin: mouse; fuse: false" raycaster="objects: .clickable; far: 100; autoRefresh: true" position="0 0 -1"></a-entity>
-      </a-camera>
+      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
       <a-entity mindar-image-target="targetIndex: 0">
-        <!-- Прозрачный хитбокс: ловит клики/тапы над моделью надёжнее, чем сама glTF-сетка -->
-        <a-box
-          id="coralineHitbox"
-          class="clickable"
-          position="0 0.035 0"
-          scale="0.28 0.35 0.28"
-          material="shader: flat; color: #ffffff; transparent: true; opacity: 0.0; depthTest: false"
-          visible="true">
-        </a-box>
         <a-gltf-model
           id="coralineModelEl"
           rotation="90 0 0"
@@ -336,8 +380,16 @@
     <span class="icon">📖</span><span>Доступные книги</span>
   </button>
 
-  <!-- Индикатор сканирования -->
-  <div id="scan-indicator"><span class="pulse"></span> Наведите на книгу…</div>
+  <!-- Верхняя плашка: «Наведите на книгу…» ↔ готическая плашка с книгой -->
+  <div id="top-banner">
+    <div class="scan-pill"><span class="pulse"></span> Наведите на книгу…</div>
+    <div class="found-card" id="found-card" role="button" tabindex="0" aria-label="Открыть аннотацию">
+      <div class="ornament">❦ ❦ ❦</div>
+      <div class="title" id="found-title">Коралина</div>
+      <div class="author" id="found-author">Нил Гейман</div>
+      <div class="tap-hint">Нажмите, чтобы прочитать аннотацию</div>
+    </div>
+  </div>
 
   <!-- Панель "Доступные книги" -->
   <div id="books-panel">
@@ -449,7 +501,7 @@
     // ---------- Запуск AR ----------
     const intro = document.getElementById('intro');
     const booksBtn = document.getElementById('books-btn');
-    const scanIndicator = document.getElementById('scan-indicator');
+    const topBanner = document.getElementById('top-banner');
     let arStarted = false;
     let mindar = null;
 
@@ -480,7 +532,7 @@
 
       intro.classList.add('hidden');
       booksBtn.classList.remove('hidden-init');
-      scanIndicator.classList.add('show');
+      topBanner.classList.add('show');
       arStarted = true;
       toast('Наведите камеру на обложку книги «Коралина».', 'info', 5000);
 
@@ -503,44 +555,36 @@
         });
       }
 
-      // 3. Слушаем события цели
+      // 3. Слушаем события цели: при нахождении — крупная готическая плашка
+      //    с названием книги и автором (кликабельная); при потере — обратно «Наведите…».
       const target = document.querySelector('[mindar-image-target]');
       let lostTimer = null;
       let hintLostShown = false;
-      let modelVisible = false; // цель найдена — модель видна на экране
-      target.addEventListener('targetFound', () => {
-        scanIndicator.classList.remove('show');
+      function showFound() {
+        topBanner.classList.add('show', 'is-found');
         if (lostTimer) { clearTimeout(lostTimer); lostTimer = null; }
-        if (!hintLostShown) toast('Модель найдена — нажмите на неё, чтобы прочитать аннотацию.', 'ok', 4500);
+        if (!hintLostShown) toast('Книга найдена — нажмите на плашку сверху, чтобы прочитать аннотацию.', 'ok', 4500);
         hintLostShown = true;
-        modelVisible = true;
         startLightCheck();
-      });
-      target.addEventListener('targetLost', () => {
-        scanIndicator.classList.add('show');
+      }
+      function showScan() {
+        topBanner.classList.add('show');
+        topBanner.classList.remove('is-found');
         stopLightCheck();
-        modelVisible = false;
         if (lostTimer) clearTimeout(lostTimer);
         lostTimer = setTimeout(() => {
           toast('Наведите камеру на обложку книги.', 'info', 3500);
         }, 3500);
-      });
+      }
+      target.addEventListener('targetFound', showFound);
+      target.addEventListener('targetLost', showScan);
 
-      // 4. Открытие аннотации. Два способа срабатывают вместе:
-      //    а) клик/тап ловит прозрачный хитбокс (raycaster) — для рабочего стола;
-      //    б) запасной тап по экрану камеры, пока модель видна — для телефона,
-      //       где raycaster часто промахивается по мелкой модели.
-      const hitbox = document.getElementById('coralineHitbox');
-      hitbox.addEventListener('click', (evt) => {
-        evt.stopPropagation();
-        openAnno();
-      });
-      hitbox.addEventListener('mouseenter', () => { hitbox.setAttribute('material', 'opacity', 0.12); });
-      hitbox.addEventListener('mouseleave', () => { hitbox.setAttribute('material', 'opacity', 0.0); });
-
+      // 4. Клик по готической плашке (или Enter на ней) → аннотация.
+      //    Это надёжнее, чем ловить тап по мелкой 3D-модели.
+      const foundCard = document.getElementById('found-card');
       let lastTap = 0;
       function openAnno() {
-        // не открываем повторно и поверх других панелей
+        if (!topBanner.classList.contains('is-found')) return; // только когда книга найдена
         if (document.getElementById('anno-back').classList.contains('open')) return;
         if (document.getElementById('author-back').classList.contains('open')) return;
         if (document.getElementById('books-panel').classList.contains('open')) return;
@@ -548,13 +592,8 @@
         lastTap = Date.now();
         openModal('anno-back');
       }
-      // Запасной тап по экрану камеры (canvas — отдельный слой, overlay-кнопки его не trigger)
-      function onScreenTap() { if (modelVisible) openAnno(); }
-      const canvas = document.querySelector('a-scene').canvas || document.querySelector('canvas');
-      if (canvas) {
-        canvas.addEventListener('click', onScreenTap);
-        canvas.addEventListener('touchend', onScreenTap, { passive: true });
-      }
+      foundCard.addEventListener('click', openAnno);
+      foundCard.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAnno(); } });
     }
 
     // ---------- Проверка освещённости ----------
