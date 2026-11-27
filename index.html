@@ -188,7 +188,7 @@
       return { close: remove };
     }
 
-    // Данные книг (легко расширять — добавьте элемент в #books-panel и сюда)
+    // Данные книг
     const BOOKS = [
       { id: 'coraline', title: 'Коралина', author: 'Нил Гейман' }
     ];
@@ -204,13 +204,12 @@
 
     async function startAR() {
       if (arStarted) return;
-      // 1. Проверка доступности камеры
+      // Проверка доступности камеры
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         toast('Камера не поддерживается этим устройством.', 'err', 0);
         return;
       }
       try {
-        // Запрашиваем поток заранее для человекочитаемой ошибки
         const testStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
         testStream.getTracks().forEach(tr => tr.stop());
       } catch (e) {
@@ -231,8 +230,7 @@
       arStarted = true;
       toast('Наведите камеру на обложку книги.', 'info', 5000);
 
-      // 2. Сначала вешаем слежение и обработчики, потом bootAR()
-      //    (MindAR 1.2.5 start() не возвращает Promise).
+      
       const sceneEl = document.querySelector('a-scene');
       sceneEl.addEventListener('arError', () => {
         toast('Не удалось запустить камеру. Закройте другие вкладки с камерой и обновите страницу.', 'err', 0);
@@ -246,11 +244,11 @@
         }
       }
 
-      // 3. Опрос видимости цели каждые 200 мс (события targetFound/Lost ненадёжны).
+      // Опрос видимости цели каждые 200 мс
       const target = document.querySelector('[mindar-image-target]');
       let lostTimer = null;
       let hintLostShown = false;
-      let wasFound = false; // предыдущее состояние — чтобы не дёргать логику впустую
+      let wasFound = false;
       function showFound() {
         topBanner.classList.add('show', 'is-found');
         if (lostTimer) { clearTimeout(lostTimer); lostTimer = null; }
@@ -267,10 +265,10 @@
           toast('Наведите камеру на обложку книги.', 'info', 3500);
         }, 3500);
       }
-      // targetFound/Lost — резервный канал
+
       target.addEventListener('targetFound', () => { wasFound = true; showFound(); });
       target.addEventListener('targetLost', () => { wasFound = false; showScan(); });
-      // Основной канал — опрос object3D.visible.
+
       const poll = setInterval(() => {
         const obj = target.object3D;
         if (!obj) return;
@@ -281,7 +279,7 @@
         }
       }, 200);
 
-      // 4. Клик по плашке → аннотация (надёжнее тапа по 3D-модели).
+      // Клик по плашке
       const foundCard = document.getElementById('found-card');
       let lastTap = 0;
       function openAnno() {
@@ -296,12 +294,12 @@
       foundCard.addEventListener('click', openAnno);
       foundCard.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAnno(); } });
 
-      // 5. Запуск MindAR в самом конце, после всех слушателей.
+      // апуск MindAR
       sceneEl.addEventListener('loaded', bootAR);
       if (sceneEl.hasLoaded && sceneEl.systems['mindar-image-system']) bootAR();
     }
 
-    // Очистка AR-сессии (без неё повторный запуск падает).
+    // Очистка AR-сессии
     function stopAR() {
       try {
         if (mindar && typeof mindar.stop === 'function') {
@@ -309,14 +307,14 @@
         }
       } catch (e) { /* сессия уже закрыта */ }
       mindar = null;
-      // Останавливаем видеопоток камеры напрямую
+      // Останавливаем видеопоток камеры
       const v = document.querySelector('video');
       if (v && v.srcObject) {
         v.srcObject.getTracks().forEach(tr => tr.stop());
         v.srcObject = null;
       }
     }
-    // pagehide (моб.) + beforeunload (десктоп). visibilitychange НЕ используем.
+
     window.addEventListener('pagehide', stopAR);
     window.addEventListener('beforeunload', stopAR);
 
@@ -341,17 +339,17 @@
         const d = lightCtx.getImageData(0, 0, lightCanvas.width, lightCanvas.height).data;
         let sum = 0, n = 0;
         for (let i = 0; i < d.length; i += 4) { sum += (0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2]); n++; }
-        const avg = sum / n; // 0..255
+        const avg = sum / n;
         if (avg < 55) {
           if (!lowLightSince) lowLightSince = Date.now();
           else if (Date.now() - lowLightSince > 2500) {
             toast('Мало света — подойдите к источнику света или включите подсветку.', 'warn', 4000);
-            lowLightSince = Date.now() + 6000; // не спамить
+            lowLightSince = Date.now() + 6000;
           }
         } else {
           lowLightSince = 0;
         }
-      } catch (e) { /* видео ещё не готово */ }
+      } catch (e) { }
     }
 
     // Панель «Доступные книги»
